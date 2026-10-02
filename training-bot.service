@@ -1,0 +1,20 @@
+[Unit]
+Description=Training Signup Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trainingbot
+Group=trainingbot
+WorkingDirectory=/opt/training_signup_bot
+
+ExecStart=/opt/training_signup_bot/.venv/bin/python /opt/training_signup_bot/main.py
+
+Restart=always
+RestartSec=5
+
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

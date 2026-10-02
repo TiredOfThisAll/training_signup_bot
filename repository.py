@@ -5,6 +5,8 @@ import models
 
 
 async def init(conn):
+    await conn.execute("PRAGMA journal_mode = WAL")
+
     await conn.execute("""
     CREATE TABLE IF NOT EXISTS managed_chats (
         chat_id INTEGER PRIMARY KEY

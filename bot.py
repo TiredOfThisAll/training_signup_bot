@@ -33,7 +33,7 @@ def is_registration_time(t_day: models.WeeklyPractice):
 
     current = now.strftime("%H:%M")
 
-    return t_day.registration_start <= current <= t_day.registration_end
+    return t_day.registration_start <= current < t_day.registration_end
 
 
 async def notify_start(chat_id):

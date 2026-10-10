@@ -37,6 +37,14 @@ async def init(conn):
     )
     """)
 
+    await conn.execute("""
+    CREATE TABLE IF NOT EXISTS scheduler_state (
+        chat_id INTEGER PRIMARY KEY,
+        active_training_id INTEGER,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     await conn.commit()
 
 
@@ -86,6 +94,7 @@ async def remove_managed_chat(conn, chat_id):
     await conn.execute("DELETE FROM participants WHERE chat_id = ?", (chat_id,))
     await conn.execute("DELETE FROM weekly_practice WHERE chat_id = ?", (chat_id,))
     await conn.execute("DELETE FROM managed_chats WHERE chat_id = ?", (chat_id,))
+    await conn.execute("DELETE FROM scheduler_state WHERE chat_id = ?",(chat_id,),)
     await conn.commit()
 
 
@@ -205,4 +214,45 @@ async def clear_participants(conn, chat_id):
         DELETE FROM participants
         WHERE chat_id = ?
     """, (chat_id,))
+    await conn.commit()
+
+
+async def get_scheduler_state(conn, chat_id: int):
+    cursor = await conn.execute(
+        """
+        SELECT active_training_id
+        FROM scheduler_state
+        WHERE chat_id = ?
+        """,
+        (chat_id,),
+    )
+
+    row = await cursor.fetchone()
+
+    if row is None:
+        return False, None
+
+    return True, row[0]
+
+
+async def set_scheduler_state(
+    conn,
+    chat_id: int,
+    active_training_id: int | None,
+):
+    await conn.execute(
+        """
+        INSERT INTO scheduler_state (
+            chat_id,
+            active_training_id,
+            updated_at
+        )
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(chat_id) DO UPDATE SET
+            active_training_id = excluded.active_training_id,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (chat_id, active_training_id),
+    )
+
     await conn.commit()

@@ -1,5 +1,7 @@
 import asyncio
 from aiogram import Bot
+import os
+from loguru import logger
 
 from connection import create_connection
 import repository as rep
@@ -9,23 +11,33 @@ from scheduler import scheduler_loop
 
 async def main():
     conn = await create_connection()
-    await rep.init(conn)
     bot = Bot(TOKEN)
 
-    stop_event = asyncio.Event()
+    os.makedirs("logs", exist_ok=True)
 
-    task = asyncio.create_task(
-        scheduler_loop(conn, bot, stop_event)
+    logger.add(
+        "logs/scheduler.log",
+        level="DEBUG",
+        rotation="10 MB",
+        retention="7 days",
+        compression="zip",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
     )
 
     try:
-        await asyncio.Event().wait()  # держим процесс живым
-    except (KeyboardInterrupt, SystemExit):
-        pass
-    finally:
-        stop_event.set()
-        task.cancel()
+        await rep.init(conn)
 
+        stop_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
+
+        import signal
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop_event.set)
+
+        await scheduler_loop(conn, bot, stop_event)
+
+    finally:
         await bot.session.close()
         await conn.close()
 

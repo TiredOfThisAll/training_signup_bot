@@ -26,11 +26,16 @@ def get_active_training(schedules):
 
 async def notify(bot, chat_id, text):
     try:
-        await bot.send_message(chat_id, text)
+        await asyncio.wait_for(
+            bot.send_message(chat_id, text),
+            timeout=30
+        )
+        return True
     except Exception:
         logger.exception(
             f"Failed to send notification | chat={chat_id}"
         )
+        return False
 
 
 async def scheduler_loop(conn, bot, stop_event: asyncio.Event):
@@ -58,12 +63,22 @@ async def scheduler_loop(conn, bot, stop_event: asyncio.Event):
 
                 if previous_training_id is None and active_training_id is not None:
                     logger.info(f"OPEN registration | chat={chat_id}")
+                    sent = await notify(bot, chat_id, "🔥 Запись открыта!")
+
+                    if not sent:
+                        logger.error(
+                            f"CLOSE failed; keeping participants | chat={chat_id}"
+                        )
+                        continue
+    
                     await rep.clear_participants(conn, chat_id)
-                    await notify(bot, chat_id, "🔥 Запись открыта!")
 
                 elif previous_training_id is not None and active_training_id is None:
-                    logger.info(f"CLOSE registration | chat={chat_id}")
+                    logger.info(f"CLOSE step=read_participants | chat={chat_id}")
                     participants = await rep.get_participants(conn, chat_id)
+                    logger.info(
+                        f"CLOSE step=participants_loaded | chat={chat_id} count={len(participants)}"
+                    )
 
                     if participants:
                         text = "❌ Запись закрыта!\n\n👥 Участники:\n"
@@ -74,13 +89,22 @@ async def scheduler_loop(conn, bot, stop_event: asyncio.Event):
                     else:
                         text = "❌ Запись закрыта!\n\n👥 Участников нет"
 
-                    await notify(bot, chat_id, text)
+                    logger.info(f"CLOSE step=send_message | chat={chat_id}")
+                    sent = await notify(bot, chat_id, text)
+
+                    if not sent:
+                        logger.error(
+                            f"CLOSE failed; keeping participants | chat={chat_id}"
+                        )
+                        continue
+
+                    logger.info(f"CLOSE step=clear_participants | chat={chat_id}")
                     await rep.clear_participants(conn, chat_id)
+
+                    logger.info(f"CLOSE complete | chat={chat_id}")
 
                 t_lists_status[chat_id] = active_training_id
 
-            await asyncio.wait_for(stop_event.wait(), timeout=60)
-            break
         except asyncio.CancelledError:
             raise
         except Exception:
